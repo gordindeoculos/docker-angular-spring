@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres_operacoes
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_DB: operacoes_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - operacoes_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d operacoes_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  spring:
+    image: maven:3.9.6-eclipse-temurin-21
+    container_name: spring_operacoes
+    working_dir: /app
+    volumes:
+      - ../backend-spring:/app
+      - ~/.m2:/root/.m2
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/operacoes_db
+      SPRING_DATASOURCE_USERNAME: admin
+      SPRING_DATASOURCE_PASSWORD: admin123
+    command: mvn spring-boot:run
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - operacoes_net
+
+  angular:
+    build:
+      context: ../frontend-angular
+      dockerfile: ../docker/Dockerfile-angular
+    container_name: angular_operacoes
+    volumes:
+      - ../frontend-angular:/app
+      - /app/node_modules
+    ports:
+      - "4200:4200"
+    command: sh -c "npm install && npm run start -- --host 0.0.0.0 --poll=2000"
+    depends_on:
+      - spring
+    networks:
+      - operacoes_net
+
+networks:
+  operacoes_net:
+
+volumes:
+  postgres_data:
